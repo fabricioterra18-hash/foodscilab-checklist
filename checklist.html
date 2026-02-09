@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>FoodSciLab • Checklist</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="stylesheet" href="/app.css"/>
+  <script defer src="/data.js"></script>
+  <script defer src="/app.js"></script>
+  
+</head>
+<body>
+  <div class="container">
+    
+<div class="header">
+  <div class="brand">
+    <div class="title">Checklist</div>
+    <div class="subtitle">Marque tarefas, edite notas e acompanhe por fase.</div>
+  </div>
+  <div class="pill" id="summaryPill">⏳ Carregando…</div>
+</div>
+
+<div class="card">
+  <div class="filters">
+    <input id="q" class="input" placeholder="Buscar tarefa (ex: wireframe, PetriLab, validação)…"/>
+    <select id="statusF" class="input">
+      <option value="all">Todos os status</option>
+      <option value="todo">Não iniciado</option>
+      <option value="doing">Em andamento</option>
+      <option value="blocked">Bloqueado</option>
+      <option value="done">Concluído</option>
+    </select>
+    <select id="prioF" class="input">
+      <option value="all">Todas prioridades</option>
+      <option value="high">Alta</option>
+      <option value="med">Média</option>
+      <option value="low">Baixa</option>
+    </select>
+  </div>
+  <div class="small" style="margin-top:10px">Dica: clique em “Editar” para adicionar notas e links.</div>
+</div>
+
+<div id="phaseSections"></div>
+
+<div class="modal" id="taskModal" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <div class="top">
+      <h3 id="mTitle">Tarefa</h3>
+      <button class="close" id="mClose" type="button">Fechar</button>
+    </div>
+    <div class="hr"></div>
+    <div class="filters">
+      <select id="mStatus">
+        <option value="todo">Não iniciado</option>
+        <option value="doing">Em andamento</option>
+        <option value="blocked">Bloqueado</option>
+        <option value="done">Concluído</option>
+      </select>
+      <select id="mPrio">
+        <option value="high">Prioridade: Alta</option>
+        <option value="med">Prioridade: Média</option>
+        <option value="low">Prioridade: Baixa</option>
+      </select>
+    </div>
+    <div style="height:10px"></div>
+    <label class="small">Data alvo (opcional)</label>
+    <input class="input" id="mDue" placeholder="YYYY-MM-DD"/>
+    <div style="height:10px"></div>
+    <label class="small">Notas</label>
+    <textarea id="mNotes" placeholder="Anotações, decisões, próximos passos…"></textarea>
+    <div style="height:10px"></div>
+    <label class="small">Links (1 por linha)</label>
+    <textarea id="mLinks" class="noteMono" placeholder="https://figma.com/...
+https://docs..."></textarea>
+    <div class="btnRow">
+      <button class="btn primary" id="mSave" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  let data = getData();
+  const counts = taskCounts(data);
+  document.getElementById('summaryPill').textContent = `✅ ${counts.pct}% • ${counts.done}/${counts.total}`;
+
+  const q = document.getElementById('q');
+  const statusF = document.getElementById('statusF');
+  const prioF = document.getElementById('prioF');
+
+  const phaseSections = document.getElementById('phaseSections');
+
+  function render(){
+    data = getData();
+    phaseSections.innerHTML = '';
+    const query = q.value.trim().toLowerCase();
+    const sVal = statusF.value;
+    const pVal = prioF.value;
+
+    data.phases.forEach(phase=>{
+      const pp = phaseProgress(phase);
+      const section = document.createElement('section');
+      section.className='card';
+      section.id = phase.id;
+      section.innerHTML = `
+        <div class="rowTop">
+          <div>
+            <div class="rowTitle">${phase.name}</div>
+            <div class="rowMeta">${phase.desc}</div>
+          </div>
+          <div class="pill">📌 ${pp.pct}%</div>
+        </div>
+        <div class="progressWrap" style="margin-top:10px">
+          <div class="progressBar" style="width:${pp.pct}%"></div>
+        </div>
+        <div class="small" style="margin-top:8px">${pp.done}/${pp.total} tarefas</div>
+        <div class="hr"></div>
+        <div class="list" id="list-${phase.id}"></div>
+      `;
+      phaseSections.appendChild(section);
+
+      const list = section.querySelector('#list-'+phase.id);
+
+      phase.tasks.forEach(task=>{
+        if(query && !task.title.toLowerCase().includes(query) && !(task.notes||"").toLowerCase().includes(query)) return;
+        if(sVal!=='all' && task.status!==sVal) return;
+        if(pVal!=='all' && task.prio!==pVal) return;
+
+        const pr = formatPrio(task.prio);
+        const el = document.createElement('div');
+        el.className='item';
+        el.innerHTML = `
+          <input class="check" type="checkbox" ${task.status==='done'?'checked':''} data-id="${task.id}" />
+          <div class="main">
+            <div class="title">${task.title}</div>
+            <div class="meta">Status: ${task.status==='todo'?'não iniciado':task.status==='doing'?'em andamento':task.status==='blocked'?'bloqueado':'concluído'}${task.due?` • Prazo: ${task.due}`:''}</div>
+            <div class="badges">
+              <span class="badge ${pr.cls}">${pr.label}</span>
+              ${task.notes?'<span class="badge">📝 notas</span>':''}
+              ${(task.links||[]).length?'<span class="badge">🔗 links</span>':''}
+            </div>
+          </div>
+          <div class="actions">
+            <button class="iconBtn" data-edit="${task.id}">Editar</button>
+          </div>
+        `;
+        list.appendChild(el);
+      });
+
+      if(!list.children.length){
+        list.innerHTML = '<div class="small">Nenhuma tarefa com esse filtro nesta fase.</div>';
+      }
+    });
+
+    // bind checkboxes
+    document.querySelectorAll('input[type="checkbox"][data-id]').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const id = cb.getAttribute('data-id');
+        let d = getData();
+        d = updateTask(d, id, (t)=>{
+          t.status = cb.checked ? 'done' : 'todo';
+        });
+        setData(d);
+        // update pill quickly
+        const c = taskCounts(d);
+        document.getElementById('summaryPill').textContent = `✅ ${c.pct}% • ${c.done}/${c.total}`;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-edit]').forEach(btn=>{
+      btn.addEventListener('click', ()=>openTask(btn.getAttribute('data-edit')));
+    });
+  }
+
+  // modal
+  const modal = document.getElementById('taskModal');
+  const mTitle = document.getElementById('mTitle');
+  const mStatus = document.getElementById('mStatus');
+  const mPrio = document.getElementById('mPrio');
+  const mDue = document.getElementById('mDue');
+  const mNotes = document.getElementById('mNotes');
+  const mLinks = document.getElementById('mLinks');
+  let currentId = null;
+
+  function openTask(id){
+    const d = getData();
+    const ft = findTask(d, id);
+    if(!ft) return;
+    currentId = id;
+    const t = ft.task;
+    mTitle.textContent = t.title;
+    mStatus.value = t.status || 'todo';
+    mPrio.value = t.prio || 'med';
+    mDue.value = t.due || '';
+    mNotes.value = t.notes || '';
+    mLinks.value = (t.links||[]).filter(Boolean).join('\n');
+    modal.classList.add('show');
+  }
+  function close(){ modal.classList.remove('show'); currentId=null; }
+  document.getElementById('mClose').addEventListener('click', close);
+  modal.addEventListener('click', (e)=>{ if(e.target===modal) close(); });
+
+  document.getElementById('mSave').addEventListener('click', ()=>{
+    if(!currentId) return;
+    let d = getData();
+    d = updateTask(d, currentId, (t)=>{
+      t.status = mStatus.value;
+      t.prio = mPrio.value;
+      t.due = mDue.value.trim();
+      t.notes = mNotes.value;
+      t.links = mLinks.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    });
+    setData(d);
+    render();
+    close();
+  });
+
+  [q,statusF,prioF].forEach(el=> el.addEventListener('input', render));
+  render();
+})();
+</script>
+
+  </div>
+  <nav class="tabs"><div class="inner">
+<a class="tab" href="index.html"><div class="ticon">🏠</div><div class="tlabel">Dashboard</div></a>
+<a class="tab active" href="checklist.html"><div class="ticon">✅</div><div class="tlabel">Checklist</div></a>
+<a class="tab" href="backlog.html"><div class="ticon">🗂️</div><div class="tlabel">Backlog</div></a>
+<a class="tab" href="settings.html"><div class="ticon">⚙️</div><div class="tlabel">Config</div></a>
+</div></nav>
+</body>
+</html>
