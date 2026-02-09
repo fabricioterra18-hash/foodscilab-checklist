@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>FoodSciLab • Dashboard</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="stylesheet" href="/app.css"/>
+  <script defer src="/data.js"></script>
+  <script defer src="/app.js"></script>
+  
+</head>
+<body>
+  <div class="container">
+    
+<div class="header">
+  <div class="brand">
+    <div class="title">FoodSciLab • Checklist 2026</div>
+    <div class="subtitle">Seu painel pessoal para tirar o plano do papel (salvo localmente no navegador).</div>
+  </div>
+  <div class="pill" id="overallPill">⏳ Carregando progresso…</div>
+</div>
+
+<div class="grid cols2">
+  <section class="card">
+    <h2>Progresso geral</h2>
+    <div class="kpiRow">
+      <div class="kpi">
+        <div class="label">Tarefas concluídas</div>
+        <div class="value" id="kpiDone">0</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Total de tarefas</div>
+        <div class="value" id="kpiTotal">0</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Concluído</div>
+        <div class="value" id="kpiPct">0%</div>
+      </div>
+    </div>
+    <div class="progressWrap" aria-label="Barra de progresso geral">
+      <div class="progressBar" id="overallBar"></div>
+    </div>
+    <div class="btnRow">
+      <a class="btn primary" href="checklist.html">Abrir checklist</a>
+      <button class="btn" id="resetBtn" type="button">Resetar (cuidado)</button>
+    </div>
+    <div class="small" style="margin-top:10px;">
+      Dica: use <b>Config</b> para exportar um backup (JSON) semanal.
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Próximas tarefas (prioridade)</h2>
+    <div id="nextList" class="list"></div>
+    <div class="small">Mostra pendências com prioridade Alta/Média primeiro.</div>
+  </section>
+</div>
+
+<div style="height:14px"></div>
+
+<section class="card">
+  <h2>Fases</h2>
+  <div id="phaseGrid" class="grid cols3"></div>
+</section>
+
+<div class="modal" id="taskModal" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <div class="top">
+      <h3 id="mTitle">Tarefa</h3>
+      <button class="close" id="mClose" type="button">Fechar</button>
+    </div>
+    <div class="hr"></div>
+    <div class="filters">
+      <select id="mStatus">
+        <option value="todo">Não iniciado</option>
+        <option value="doing">Em andamento</option>
+        <option value="blocked">Bloqueado</option>
+        <option value="done">Concluído</option>
+      </select>
+      <select id="mPrio">
+        <option value="high">Prioridade: Alta</option>
+        <option value="med">Prioridade: Média</option>
+        <option value="low">Prioridade: Baixa</option>
+      </select>
+    </div>
+    <div style="height:10px"></div>
+    <label class="small">Data alvo (opcional)</label>
+    <input class="input" id="mDue" placeholder="YYYY-MM-DD"/>
+    <div style="height:10px"></div>
+    <label class="small">Notas</label>
+    <textarea id="mNotes" placeholder="Anotações, decisões, próximos passos…"></textarea>
+    <div style="height:10px"></div>
+    <label class="small">Links (1 por linha)</label>
+    <textarea id="mLinks" class="noteMono" placeholder="https://figma.com/...
+https://docs..."></textarea>
+    <div class="btnRow">
+      <button class="btn primary" id="mSave" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const data = getData();
+  const counts = taskCounts(data);
+  document.getElementById('kpiDone').textContent = counts.done;
+  document.getElementById('kpiTotal').textContent = counts.total;
+  document.getElementById('kpiPct').textContent = counts.pct + '%';
+  document.getElementById('overallBar').style.width = counts.pct + '%';
+  document.getElementById('overallPill').textContent = `✅ ${counts.pct}% • ${counts.done}/${counts.total} tarefas`;
+
+  // next tasks
+  const tasks = allTasks(data).filter(t=>t.status!=="done");
+  const prioOrder = {high:0, med:1, low:2};
+  tasks.sort((a,b)=> (prioOrder[a.prio]-prioOrder[b.prio]) || a.title.localeCompare(b.title));
+  const next = tasks.slice(0,5);
+
+  const nextList = document.getElementById('nextList');
+  if(next.length===0){
+    nextList.innerHTML = '<div class="small">Tudo concluído! 🎉</div>';
+  }else{
+    next.forEach(t=>{
+      const pr = formatPrio(t.prio);
+      const el = document.createElement('div');
+      el.className='item';
+      el.innerHTML = `
+        <input class="check" type="checkbox" ${t.status==='done'?'checked':''} disabled />
+        <div class="main">
+          <div class="title">${t.title}</div>
+          <div class="meta">${t.phaseName} • Status: ${t.status==='todo'?'não iniciado':t.status==='doing'?'em andamento':'bloqueado'}</div>
+          <div class="badges"><span class="badge ${pr.cls}">${pr.label}</span></div>
+        </div>
+        <div class="actions"><button class="iconBtn" data-task="${t.id}">Editar</button></div>
+      `;
+      nextList.appendChild(el);
+    });
+  }
+
+  // phases
+  const grid = document.getElementById('phaseGrid');
+  data.phases.forEach(p=>{
+    const pp = phaseProgress(p);
+    const card = document.createElement('div');
+    card.className='card';
+    card.style.padding='12px';
+    card.innerHTML = `
+      <div class="rowTop">
+        <div>
+          <div class="rowTitle">${p.name}</div>
+          <div class="rowMeta">${p.desc}</div>
+        </div>
+        <div class="pill">📌 ${pp.pct}%</div>
+      </div>
+      <div class="progressWrap" style="margin-top:10px">
+        <div class="progressBar" style="width:${pp.pct}%"></div>
+      </div>
+      <div class="btnRow" style="margin-top:10px">
+        <a class="btn" href="checklist.html#${p.id}">Abrir</a>
+      </div>
+      <div class="small">${pp.done}/${pp.total} tarefas</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // modal
+  const modal = document.getElementById('taskModal');
+  const mTitle = document.getElementById('mTitle');
+  const mStatus = document.getElementById('mStatus');
+  const mPrio = document.getElementById('mPrio');
+  const mDue = document.getElementById('mDue');
+  const mNotes = document.getElementById('mNotes');
+  const mLinks = document.getElementById('mLinks');
+  let currentId = null;
+
+  function openTask(id){
+    const d = getData();
+    const ft = findTask(d, id);
+    if(!ft) return;
+    currentId = id;
+    const t = ft.task;
+    mTitle.textContent = t.title;
+    mStatus.value = t.status || 'todo';
+    mPrio.value = t.prio || 'med';
+    mDue.value = t.due || '';
+    mNotes.value = t.notes || '';
+    mLinks.value = (t.links||[]).filter(Boolean).join('\n');
+    modal.classList.add('show');
+  }
+  function close(){ modal.classList.remove('show'); currentId=null; }
+  document.getElementById('mClose').addEventListener('click', close);
+  modal.addEventListener('click', (e)=>{ if(e.target===modal) close(); });
+
+  document.getElementById('mSave').addEventListener('click', ()=>{
+    if(!currentId) return;
+    let d = getData();
+    d = updateTask(d, currentId, (t)=>{
+      t.status = mStatus.value;
+      t.prio = mPrio.value;
+      t.due = mDue.value.trim();
+      t.notes = mNotes.value;
+      t.links = mLinks.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    });
+    setData(d);
+    location.reload();
+  });
+
+  document.querySelectorAll('[data-task]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openTask(btn.getAttribute('data-task')));
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    if(confirm('Tem certeza? Isso apaga seu progresso local. Faça backup em Config antes.')){
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    }
+  });
+})();
+</script>
+
+  </div>
+  <nav class="tabs"><div class="inner">
+<a class="tab active" href="index.html"><div class="ticon">🏠</div><div class="tlabel">Dashboard</div></a>
+<a class="tab" href="checklist.html"><div class="ticon">✅</div><div class="tlabel">Checklist</div></a>
+<a class="tab" href="backlog.html"><div class="ticon">🗂️</div><div class="tlabel">Backlog</div></a>
+<a class="tab" href="settings.html"><div class="ticon">⚙️</div><div class="tlabel">Config</div></a>
+</div></nav>
+</body>
+</html>

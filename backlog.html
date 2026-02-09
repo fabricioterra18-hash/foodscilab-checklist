@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>FoodSciLab • Backlog</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="stylesheet" href="/app.css"/>
+  <script defer src="/data.js"></script>
+  <script defer src="/app.js"></script>
+  
+</head>
+<body>
+  <div class="container">
+    
+<div class="header">
+  <div class="brand">
+    <div class="title">Backlog</div>
+    <div class="subtitle">Guarde ideias e coisas para “depois do MVP” sem bagunçar o plano.</div>
+  </div>
+  <div class="pill" id="countPill">🗂️ 0 itens</div>
+</div>
+
+<section class="card">
+  <h2>Novo item</h2>
+  <input id="bTitle" class="input" placeholder="Ex: Bioquímica 3D avançada (proteínas)…"/>
+  <div style="height:10px"></div>
+  <textarea id="bNotes" placeholder="Por que é importante? Critério de entrada? Dependências?"></textarea>
+  <div class="btnRow">
+    <button class="btn primary" id="addBtn" type="button">Adicionar</button>
+    <button class="btn" id="clearBtn" type="button">Limpar campos</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Itens</h2>
+  <div id="bList" class="list"></div>
+  <div class="small">Dica: mantenha o backlog curto e objetivo.</div>
+</section>
+
+<script>
+(function(){
+  const KEY="fslab_backlog_v1";
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){ return []; } }
+  function save(items){ localStorage.setItem(KEY, JSON.stringify(items)); }
+  const title = document.getElementById('bTitle');
+  const notes = document.getElementById('bNotes');
+  const list = document.getElementById('bList');
+  const pill = document.getElementById('countPill');
+
+  function render(){
+    const items = load();
+    pill.textContent = `🗂️ ${items.length} itens`;
+    list.innerHTML='';
+    if(items.length===0){
+      list.innerHTML='<div class="small">Sem itens ainda.</div>';
+      return;
+    }
+    items.forEach((it, idx)=>{
+      const el=document.createElement('div');
+      el.className='item';
+      el.innerHTML=`
+        <div class="main">
+          <div class="title">${it.title}</div>
+          <div class="meta">${it.created}</div>
+          <div class="small" style="margin-top:6px;white-space:pre-wrap">${it.notes||''}</div>
+        </div>
+        <div class="actions">
+          <button class="iconBtn" data-del="${idx}">Excluir</button>
+        </div>
+      `;
+      list.appendChild(el);
+    });
+    document.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = parseInt(btn.getAttribute('data-del'),10);
+        const items = load();
+        items.splice(idx,1);
+        save(items);
+        render();
+      });
+    });
+  }
+
+  document.getElementById('addBtn').addEventListener('click', ()=>{
+    const t = title.value.trim();
+    if(!t){ alert('Digite um título.'); return; }
+    const items = load();
+    items.unshift({title:t, notes:notes.value, created:new Date().toLocaleString()});
+    save(items);
+    title.value=''; notes.value='';
+    render();
+  });
+  document.getElementById('clearBtn').addEventListener('click', ()=>{ title.value=''; notes.value=''; });
+
+  render();
+})();
+</script>
+
+  </div>
+  <nav class="tabs"><div class="inner">
+<a class="tab" href="index.html"><div class="ticon">🏠</div><div class="tlabel">Dashboard</div></a>
+<a class="tab" href="checklist.html"><div class="ticon">✅</div><div class="tlabel">Checklist</div></a>
+<a class="tab active" href="backlog.html"><div class="ticon">🗂️</div><div class="tlabel">Backlog</div></a>
+<a class="tab" href="settings.html"><div class="ticon">⚙️</div><div class="tlabel">Config</div></a>
+</div></nav>
+</body>
+</html>

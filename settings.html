@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>FoodSciLab • Config</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <link rel="stylesheet" href="/app.css"/>
+  <script defer src="/data.js"></script>
+  <script defer src="/app.js"></script>
+  
+</head>
+<body>
+  <div class="container">
+    
+<div class="header">
+  <div class="brand">
+    <div class="title">Config</div>
+    <div class="subtitle">Backup (JSON) e manutenção do seu progresso local.</div>
+  </div>
+  <div class="pill">💾 Dados locais</div>
+</div>
+
+<section class="card">
+  <h2>Backup</h2>
+  <div class="btnRow">
+    <button class="btn primary" id="exportBtn" type="button">Exportar JSON</button>
+    <label class="btn" for="importFile" style="cursor:pointer">Importar JSON</label>
+    <input id="importFile" type="file" accept="application/json" style="display:none"/>
+  </div>
+  <div class="small" style="margin-top:10px">
+    Recomendo exportar 1x por semana. O progresso fica salvo no navegador; se você limpar dados do app/navegador, pode perder.
+  </div>
+</section>
+
+<section class="card">
+  <h2>Ferramentas</h2>
+  <div class="btnRow">
+    <button class="btn warn" id="softReset" type="button">Resetar só checklist</button>
+    <button class="btn danger" id="hardReset" type="button">Apagar tudo (inclui backlog)</button>
+  </div>
+  <div class="small" style="margin-top:10px">
+    “Apagar tudo” remove checklist e backlog do armazenamento local.
+  </div>
+</section>
+
+<script>
+(function(){
+  const BACKLOG_KEY="fslab_backlog_v1";
+
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const checklist = loadData() || window.SEED_DATA;
+    const backlog = (function(){ try{ return JSON.parse(localStorage.getItem(BACKLOG_KEY)||"[]"); }catch(e){ return []; } })();
+    const blob = new Blob([JSON.stringify({checklist, backlog, exportedAt:new Date().toISOString()}, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'FoodSciLab_Checklist_Backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('importFile').addEventListener('change', async (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const text = await file.text();
+    try{
+      const obj = JSON.parse(text);
+      if(obj.checklist){
+        saveData(obj.checklist);
+      }
+      if(Array.isArray(obj.backlog)){
+        localStorage.setItem(BACKLOG_KEY, JSON.stringify(obj.backlog));
+      }
+      alert('Importado com sucesso.');
+      location.href='index.html';
+    }catch(err){
+      alert('Arquivo inválido.');
+    }
+  });
+
+  document.getElementById('softReset').addEventListener('click', ()=>{
+    if(confirm('Resetar checklist para o padrão inicial? (recomendado exportar antes)')){
+      localStorage.removeItem(STORAGE_KEY);
+      alert('Checklist resetado.');
+      location.href='index.html';
+    }
+  });
+
+  document.getElementById('hardReset').addEventListener('click', ()=>{
+    if(confirm('Apagar TUDO (checklist + backlog)? (recomendado exportar antes)')){
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(BACKLOG_KEY);
+      alert('Tudo apagado.');
+      location.href='index.html';
+    }
+  });
+})();
+</script>
+
+  </div>
+  <nav class="tabs"><div class="inner">
+<a class="tab" href="index.html"><div class="ticon">🏠</div><div class="tlabel">Dashboard</div></a>
+<a class="tab" href="checklist.html"><div class="ticon">✅</div><div class="tlabel">Checklist</div></a>
+<a class="tab" href="backlog.html"><div class="ticon">🗂️</div><div class="tlabel">Backlog</div></a>
+<a class="tab active" href="settings.html"><div class="ticon">⚙️</div><div class="tlabel">Config</div></a>
+</div></nav>
+</body>
+</html>
